@@ -1,7 +1,8 @@
-import LocationSearch from './LocationSearch';
+import LocationSearch from '../LocationSearch';
 import type { Location } from '../../types';
 import { Input } from '../ui/input';
 import { motion, AnimatePresence } from 'motion/react';
+import { MAX_AUTO_STOP_OVERS } from '../../utils/pomodoroHelper';
 
 interface LocationInputsProps {
   originKey: string;
@@ -13,6 +14,8 @@ interface LocationInputsProps {
   stopoverDurations: number[];
   onStopoverDurationsChange: (durations: number[]) => void;
   disabled?: boolean;
+  hasOrigin?: boolean;
+  hasDestination?: boolean;
 }
 
 export default function LocationInputs({
@@ -24,13 +27,16 @@ export default function LocationInputs({
   onStopoversChange,
   stopoverDurations,
   onStopoverDurationsChange,
-  disabled = false
+  disabled = false,
+  hasOrigin = false,
+  hasDestination = false
 }: LocationInputsProps) {
   const addStopover = () => {
-    if (stopovers.length < 3) {
-      onStopoversChange([...stopovers, { lat: 0, lng: 0 }]);
-      onStopoverDurationsChange([...stopoverDurations, 5]); // Default 5 minutes
+    if (stopovers.length >= MAX_AUTO_STOP_OVERS) {
+      return;
     }
+    onStopoversChange([...stopovers, { lat: 0, lng: 0 }]);
+    onStopoverDurationsChange([...stopoverDurations, 5]); // Default 5 minutes
   };
 
   const removeStopover = (index: number) => {
@@ -83,6 +89,7 @@ export default function LocationInputs({
               disabled={disabled}
               onRemove={() => removeStopover(index)}
               showRemove={true}
+              value={stopovers[index]}
             />
             <div className="flex items-center gap-2 ml-1">
               <label className="text-sm text-gray-400">Rest Duration:</label>
@@ -101,7 +108,7 @@ export default function LocationInputs({
         ))}
       </AnimatePresence>
       
-      {!disabled && stopovers.length < 3 && (
+  {!disabled && stopovers.length < MAX_AUTO_STOP_OVERS && hasOrigin && hasDestination && (
         <motion.button
           onClick={addStopover}
           className="w-full py-2 px-4 bg-gray-800/50 hover:bg-gray-700/50 rounded-2xl text-gray-400 hover:text-white transition-colors text-sm"

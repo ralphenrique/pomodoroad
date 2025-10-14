@@ -17,6 +17,13 @@ export interface SpeedSegment {
   speed: number; // average speed for this segment (meters/second)
 }
 
+export interface RouteLeg {
+  duration: number; // duration of this leg in seconds
+  distance: number; // distance of this leg in meters
+  startLocation: Location;
+  endLocation: Location;
+}
+
 export interface RouteData {
   origin: Location;
   destination: Location;
@@ -25,6 +32,7 @@ export interface RouteData {
   polyline: google.maps.LatLng[];
   speedSegments?: SpeedSegment[]; // optional speed variation data
   stopovers?: Stopover[]; // optional stopovers along the route
+  legs?: RouteLeg[]; // duration/distance for each leg between stops
 }
 
 export interface TimerState {

@@ -167,7 +167,7 @@ export default function FocusTimer({
       <div className="w-full space-y-4">
         {/* Time to Next Stopover */}
         {nextStopoverTime !== null && !isResting && (
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2 justify-center text-sm">
             <span className="text-gray-400">Next rest stop in:</span>
             <span className="text-yellow-400 font-semibold">{formatTime(nextStopoverTime)}</span>
           </div>

@@ -13,6 +13,9 @@ interface RouteMapProps {
     stopovers?: Location[];
     onStopoverPositionsCalculated?: (positions: number[]) => void;
     onMapInteraction?: () => void;
+    showHelperCircles?: boolean;
+    helperCirclePositions?: google.maps.LatLng[];
+    mapId?: string;
 }
 
 export default function RouteMap({
@@ -24,7 +27,10 @@ export default function RouteMap({
     autoCenterOnMarker,
     stopovers = [],
     onStopoverPositionsCalculated,
-    onMapInteraction
+    onMapInteraction,
+    showHelperCircles = false,
+    helperCirclePositions = [],
+    mapId
 }: RouteMapProps) {
     const [initialCenter, setInitialCenter] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -195,6 +201,7 @@ export default function RouteMap({
                 gestureHandling="greedy"
                 disableDefaultUI={true}
                 styles={mapStyles}
+                mapId={mapId}
             >
                 <RouteRenderer
                     origin={origin}
@@ -206,6 +213,8 @@ export default function RouteMap({
                     stopovers={stopovers}
                     onStopoverPositionsCalculated={onStopoverPositionsCalculated}
                     onUserInteraction={onMapInteraction}
+                    showHelperCircles={showHelperCircles}
+                    helperCirclePositions={helperCirclePositions}
                 />
             </Map>
         </div>

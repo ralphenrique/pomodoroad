@@ -12,7 +12,21 @@ interface RouteRendererProps {
     stopovers?: Location[];
     onStopoverPositionsCalculated?: (positions: number[]) => void;
     onUserInteraction?: () => void;
+    showHelperCircles?: boolean;
+    helperCirclePositions?: google.maps.LatLng[];
 }
+
+const DEFAULT_SPEED_MPS = 13.4;
+const MAX_SPEED_LIMIT_POINTS_PER_REQUEST = 90;
+const MPS_PER_KPH = 1000 / 3600;
+const MPS_PER_MPH = 1609.34 / 3600;
+type SimpleLatLng = { lat: number; lng: number };
+type SpeedSegment = {
+    startDistance: number;
+    endDistance: number;
+    duration: number;
+    speed: number;
+};
 
 // Decode polyline string to array of LatLng coordinates
 function decodePolyline(encoded: string): google.maps.LatLng[] {
@@ -58,7 +72,9 @@ export default function RouteRenderer({
     autoCenterOnMarker,
     stopovers = [],
     onStopoverPositionsCalculated,
-    onUserInteraction
+    onUserInteraction,
+    showHelperCircles = false,
+    helperCirclePositions = []
 }: RouteRendererProps) {
     const map = useMap();
     const polylineRef = useRef<google.maps.Polyline | null>(null);
@@ -66,9 +82,12 @@ export default function RouteRenderer({
     const destinationMarkerRef = useRef<google.maps.Marker | null>(null);
     const progressMarkerRef = useRef<google.maps.Marker | null>(null);
     const stopoverMarkersRef = useRef<google.maps.Marker[]>([]);
+    const helperCirclesRef = useRef<google.maps.Circle[]>([]);
     const [routePath, setRoutePath] = useState<google.maps.LatLng[]>([]);
     const [cumulativeDistances, setCumulativeDistances] = useState<number[]>([]);
-    const [speedSegments, setSpeedSegments] = useState<any[]>([]);
+    const [speedSegments, setSpeedSegments] = useState<SpeedSegment[]>([]);
+    const [legDurations, setLegDurations] = useState<number[]>([]);
+    const [totalRouteDuration, setTotalRouteDuration] = useState<number>(0);
     const animationFrameRef = useRef<number | null>(null);
     const startProgressRef = useRef<number>(0);
     const targetProgressRef = useRef<number>(0);
@@ -77,6 +96,7 @@ export default function RouteRenderer({
     const prevAutoCenterRef = useRef<boolean>(false);
     const autoCenterStartTimeRef = useRef<number>(0);
     const autoCenterActiveRef = useRef<boolean>(!!autoCenterOnMarker);
+    const currentHeadingRef = useRef<number>(0);
 
     useEffect(() => {
         autoCenterActiveRef.current = !!autoCenterOnMarker;
@@ -88,29 +108,33 @@ export default function RouteRenderer({
 
         // Detect when auto-center is toggled on
         if (autoCenterOnMarker && !prevAutoCenterRef.current) {
-            // Just enabled - set zoom and start delay timer
+            // Just enabled - set zoom and center immediately without panning
             map.setZoom(17);
+            map.setCenter(currentMarkerPosition);
+            map.setHeading(currentHeadingRef.current);
+            map.setTilt(60);
             autoCenterStartTimeRef.current = Date.now();
             prevAutoCenterRef.current = true;
-
-            // Set center after 1 second delay
-            setTimeout(() => {
-                if (autoCenterOnMarker && currentMarkerPosition) {
-                    map.setCenter(currentMarkerPosition);
-                }
-            }, 500);
+            autoCenterActiveRef.current = true;
             return;
         }
 
         // Track when auto-center is toggled off
         if (!autoCenterOnMarker && prevAutoCenterRef.current) {
             prevAutoCenterRef.current = false;
+            autoCenterActiveRef.current = false;
+            map.setTilt(0);
+            map.setHeading(0);
             return;
         }
 
-        // Continue centering if auto-center is active and delay has passed
-        if (autoCenterOnMarker && Date.now() - autoCenterStartTimeRef.current >= 1000) {
+        // Continue centering if auto-center is active - instant center, no panning
+        if (autoCenterOnMarker) {
             map.setCenter(currentMarkerPosition);
+            map.setHeading(currentHeadingRef.current);
+            if (map.getTilt() !== 60) {
+                map.setTilt(60);
+            }
         }
     }, [currentMarkerPosition, map, autoCenterOnMarker]);
 
@@ -121,6 +145,8 @@ export default function RouteRenderer({
         const handleInteraction = () => {
             if (!autoCenterActiveRef.current) return;
             autoCenterActiveRef.current = false;
+            map.setTilt(0);
+            map.setHeading(0);
             onUserInteraction();
         };
 
@@ -163,12 +189,12 @@ export default function RouteRenderer({
         stopoverMarkersRef.current = [];
 
         const totalDistance = cumulativeDistances[cumulativeDistances.length - 1];
-        const positions: number[] = [];
+        const distancePositions: number[] = [];
 
         // Create new stopover markers and calculate their positions
         stopovers.forEach((stopover, index) => {
             if (stopover.lat === 0 && stopover.lng === 0) {
-                positions.push(0);
+                distancePositions.push(0);
                 return; // Skip unset stopovers
             }
 
@@ -193,7 +219,7 @@ export default function RouteRenderer({
             // Calculate the position as a percentage of total distance
             const distanceToStopover = cumulativeDistances[closestIndex];
             const positionPercentage = totalDistance > 0 ? distanceToStopover / totalDistance : 0;
-            positions.push(positionPercentage);
+            distancePositions.push(positionPercentage);
 
             const marker = new google.maps.Marker({
                 map,
@@ -218,11 +244,36 @@ export default function RouteRenderer({
             stopoverMarkersRef.current.push(marker);
         });
 
+        // Calculate stopover positions using actual leg durations for timer accuracy
+        const timePositions: number[] = [];
+        if (totalRouteDuration > 0 && legDurations.length > 0) {
+            let cumulativeDuration = 0;
+
+            stopovers.forEach((stopover, index) => {
+                if (stopover.lat === 0 && stopover.lng === 0) {
+                    timePositions.push(0);
+                    return;
+                }
+
+                const legDuration = legDurations[index] ?? 0;
+                cumulativeDuration += legDuration;
+
+                const ratio = totalRouteDuration > 0 ? cumulativeDuration / totalRouteDuration : 0;
+                const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+                timePositions.push(clampedRatio);
+            });
+        }
+
+        const hasCompleteTimePositions = totalRouteDuration > 0 &&
+            legDurations.length >= stopovers.length &&
+            timePositions.length === stopovers.length &&
+            timePositions.every(value => Number.isFinite(value) && value >= 0 && value <= 1);
+
         // Notify parent of calculated positions
         if (onStopoverPositionsCalculated) {
-            onStopoverPositionsCalculated(positions);
+            onStopoverPositionsCalculated(hasCompleteTimePositions ? timePositions : distancePositions);
         }
-    }, [map, stopovers, routePath, cumulativeDistances, onStopoverPositionsCalculated]);
+    }, [map, stopovers, routePath, cumulativeDistances, legDurations, totalRouteDuration, onStopoverPositionsCalculated]);
 
     // Initialize markers and polyline
     useEffect(() => {
@@ -302,6 +353,7 @@ export default function RouteRenderer({
             destinationMarkerRef.current?.setMap(null);
             progressMarkerRef.current?.setMap(null);
             stopoverMarkersRef.current.forEach(marker => marker.setMap(null));
+            helperCirclesRef.current.forEach(circle => circle.setMap(null));
 
             // Cancel any ongoing animation
             if (animationFrameRef.current) {
@@ -309,6 +361,41 @@ export default function RouteRenderer({
             }
         };
     }, [map]);
+
+    // Draw helper circles at suggested stopover positions
+    useEffect(() => {
+        if (!map || !showHelperCircles) {
+            // Clear helper circles
+            helperCirclesRef.current.forEach(circle => circle.setMap(null));
+            helperCirclesRef.current = [];
+            return;
+        }
+
+        // Clear existing helper circles
+        helperCirclesRef.current.forEach(circle => circle.setMap(null));
+        helperCirclesRef.current = [];
+
+        // Create new helper circles
+        helperCirclePositions.forEach((position) => {
+            const circle = new google.maps.Circle({
+                map,
+                center: position,
+                radius: 500, // 500 meters radius
+                strokeColor: '#3B82F6',
+                strokeOpacity: 0.6,
+                strokeWeight: 2,
+                fillColor: '#3B82F6',
+                fillOpacity: 0.1,
+                clickable: false,
+                zIndex: 100
+            });
+            helperCirclesRef.current.push(circle);
+        });
+
+        return () => {
+            helperCirclesRef.current.forEach(circle => circle.setMap(null));
+        };
+    }, [map, showHelperCircles, helperCirclePositions]);
 
     // Calculate route using Routes API when origin and destination change
     useEffect(() => {
@@ -321,6 +408,10 @@ export default function RouteRenderer({
             setRoutePath([]);
             setCumulativeDistances([]);
             setSpeedSegments([]);
+            setLegDurations([]);
+            setTotalRouteDuration(0);
+            map?.setTilt(0);
+            map?.setHeading(0);
 
             return;
         }
@@ -357,7 +448,7 @@ export default function RouteRenderer({
                         }
                     },
                     travelMode: 'DRIVE',
-                    routingPreference: 'TRAFFIC_AWARE',
+                    routingPreference: 'TRAFFIC_UNAWARE',
                     computeAlternativeRoutes: false,
                     languageCode: 'en-US',
                     units: 'METRIC'
@@ -373,7 +464,7 @@ export default function RouteRenderer({
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.polyline'
+                        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.startLocation,routes.legs.endLocation,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.polyline'
                     },
                     body: JSON.stringify(requestBody)
                 });
@@ -391,6 +482,16 @@ export default function RouteRenderer({
                     const encodedPolyline = route.polyline.encodedPolyline;
                     const path = decodePolyline(encodedPolyline);
                     setRoutePath(path);
+
+                    const simplePath = path.map(point => ({ lat: point.lat(), lng: point.lng() }));
+                    let speedLimitSamples: number[] = [];
+                    if (simplePath.length > 1) {
+                        try {
+                            speedLimitSamples = await fetchSpeedLimitsForRoute(simplePath, apiKey);
+                        } catch (speedLimitError) {
+                            console.error('Error fetching speed limits:', speedLimitError);
+                        }
+                    }
 
                     // Calculate cumulative distances for constant speed movement
                     const distances: number[] = [0];
@@ -423,11 +524,18 @@ export default function RouteRenderer({
                     // Parse duration (format: "1234s" -> 1234 seconds)
                     const durationMatch = route.duration.match(/(\d+)s/);
                     const durationSeconds = durationMatch ? parseInt(durationMatch[1]) : 0;
+                    setTotalRouteDuration(durationSeconds);
 
-                    // Process steps to create speed segments
-                    const speedSegments: any[] = [];
-                    if (route.legs && route.legs.length > 0) {
+                    // Process speed segments using speed limits when available
+                    let speedSegments: SpeedSegment[] = [];
+                    if (speedLimitSamples.length > 0) {
+                        speedSegments = buildSpeedSegmentsFromSpeedLimits(distances, speedLimitSamples);
+                    }
+
+                    // Fallback to step durations if speed limits are unavailable
+                    if (speedSegments.length === 0 && route.legs && route.legs.length > 0) {
                         let cumulativeDistance = 0;
+                        const fallbackSegments: SpeedSegment[] = [];
 
                         for (const leg of route.legs) {
                             if (!leg.steps) continue;
@@ -439,9 +547,9 @@ export default function RouteRenderer({
 
                                 const startDistance = cumulativeDistance;
                                 const endDistance = cumulativeDistance + stepDistance;
-                                const speed = stepDuration > 0 ? stepDistance / stepDuration : 0;
+                                const speed = stepDuration > 0 ? stepDistance / stepDuration : DEFAULT_SPEED_MPS;
 
-                                speedSegments.push({
+                                fallbackSegments.push({
                                     startDistance,
                                     endDistance,
                                     duration: stepDuration,
@@ -451,6 +559,33 @@ export default function RouteRenderer({
                                 cumulativeDistance = endDistance;
                             }
                         }
+
+                        speedSegments = fallbackSegments;
+                    }
+
+                    // Extract leg durations and distances
+                    const legs: any[] = [];
+                    if (route.legs && route.legs.length > 0) {
+                        route.legs.forEach((leg: any) => {
+                            const legDurationMatch = leg.duration?.match(/(\d+)s/);
+                            const legDuration = legDurationMatch ? parseInt(legDurationMatch[1]) : 0;
+                            
+                            legs.push({
+                                duration: legDuration,
+                                distance: leg.distanceMeters || 0,
+                                startLocation: {
+                                    lat: leg.startLocation?.latLng?.latitude || 0,
+                                    lng: leg.startLocation?.latLng?.longitude || 0
+                                },
+                                endLocation: {
+                                    lat: leg.endLocation?.latLng?.latitude || 0,
+                                    lng: leg.endLocation?.latLng?.longitude || 0
+                                }
+                            });
+                        });
+                        setLegDurations(legs.map((leg: any) => leg.duration));
+                    } else {
+                        setLegDurations([]);
                     }
 
                     // Prepare route data
@@ -460,9 +595,11 @@ export default function RouteRenderer({
                         duration: durationSeconds,
                         distance: route.distanceMeters || 0,
                         polyline: path,
-                        speedSegments: speedSegments.length > 0 ? speedSegments : undefined
+                        speedSegments: speedSegments.length > 0 ? speedSegments : undefined,
+                        legs: legs.length > 0 ? legs : undefined
                     };
 
+                    console.log('Route legs:', legs.length, 'legs calculated');
                     console.log('Speed segments:', speedSegments.length, 'segments created');
 
                     // Store speed segments for animation
@@ -472,6 +609,10 @@ export default function RouteRenderer({
                 }
             } catch (error) {
                 console.error('Error calculating route:', error);
+                setLegDurations([]);
+                setTotalRouteDuration(0);
+                map?.setTilt(0);
+                map?.setHeading(0);
             }
         };
 
@@ -575,6 +716,13 @@ export default function RouteRenderer({
             if (nextProgress <= 1) {
                 const nextPosition = getPositionAtProgress(nextProgress);
                 const heading = google.maps.geometry.spherical.computeHeading(position, nextPosition);
+                currentHeadingRef.current = heading;
+                if (autoCenterActiveRef.current && map) {
+                    map.setHeading(heading);
+                    if (map.getTilt() !== 60) {
+                        map.setTilt(60);
+                    }
+                }
                 
                 // Update marker with new position and rotation
                 progressMarkerRef.current.setIcon({
@@ -611,7 +759,130 @@ export default function RouteRenderer({
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [progress, routePath, cumulativeDistances, speedSegments]);
+    }, [progress, routePath, cumulativeDistances, speedSegments, map]);
 
     return null;
+}
+
+async function fetchSpeedLimitsForRoute(points: SimpleLatLng[], apiKey: string): Promise<number[]> {
+    if (points.length === 0) {
+        return [];
+    }
+
+    const samples: Array<number | null> = new Array(points.length).fill(null);
+    const step = Math.max(MAX_SPEED_LIMIT_POINTS_PER_REQUEST - 1, 1);
+
+    for (let start = 0; start < points.length; start += step) {
+        const end = Math.min(points.length, start + MAX_SPEED_LIMIT_POINTS_PER_REQUEST);
+        const chunk = points.slice(start, end);
+        if (chunk.length < 2) {
+            continue;
+        }
+
+        const params = new URLSearchParams();
+        params.set('units', 'KPH');
+        params.set('key', apiKey);
+        const pathValue = chunk.map(point => `${point.lat},${point.lng}`).join('|');
+        params.set('path', pathValue);
+
+        try {
+            const response = await fetch(`https://roads.googleapis.com/v1/speedLimits?${params.toString()}`);
+            if (!response.ok) {
+                console.error('Speed limits request failed:', response.statusText);
+                continue;
+            }
+
+            const data = await response.json();
+            const speedMap = new Map<string, number>();
+
+            data?.speedLimits?.forEach((limit: any) => {
+                const converted = convertSpeedLimitToMps(limit?.speedLimit, limit?.units);
+                if (typeof converted === 'number' && limit?.placeId) {
+                    speedMap.set(limit.placeId, converted);
+                }
+            });
+
+            data?.snappedPoints?.forEach((snapped: any) => {
+                const originalIndex = typeof snapped?.originalIndex === 'number' ? snapped.originalIndex : null;
+                const placeId = snapped?.placeId;
+
+                if (originalIndex === null || !placeId || !speedMap.has(placeId)) {
+                    return;
+                }
+
+                const globalIndex = start + originalIndex;
+                if (globalIndex >= 0 && globalIndex < samples.length) {
+                    samples[globalIndex] = speedMap.get(placeId) ?? null;
+                }
+            });
+        } catch (error) {
+            console.error('Speed limits fetch error:', error);
+        }
+    }
+
+    if (!samples.some(value => value !== null)) {
+        return [];
+    }
+
+    return samples.map(value => {
+        return typeof value === 'number' && value > 0 ? value : DEFAULT_SPEED_MPS;
+    });
+}
+
+function buildSpeedSegmentsFromSpeedLimits(distances: number[], speedSamples: number[]): SpeedSegment[] {
+    if (distances.length <= 1 || speedSamples.length === 0) {
+        return [];
+    }
+
+    const segments: SpeedSegment[] = [];
+
+    for (let i = 1; i < distances.length; i++) {
+        const startDistance = distances[i - 1];
+        const endDistance = distances[i];
+        const segmentDistance = endDistance - startDistance;
+        if (segmentDistance <= 0) {
+            continue;
+        }
+
+        const prevSample = i - 1 < speedSamples.length ? speedSamples[i - 1] : undefined;
+        const nextSample = i < speedSamples.length ? speedSamples[i] : undefined;
+
+        const validPrev = typeof prevSample === 'number' && prevSample > 0;
+        const validNext = typeof nextSample === 'number' && nextSample > 0;
+
+        let segmentSpeed = DEFAULT_SPEED_MPS;
+        if (validPrev && validNext) {
+            segmentSpeed = (prevSample + nextSample) / 2;
+        } else if (validPrev) {
+            segmentSpeed = prevSample as number;
+        } else if (validNext) {
+            segmentSpeed = nextSample as number;
+        }
+
+        if (!Number.isFinite(segmentSpeed) || segmentSpeed <= 0) {
+            segmentSpeed = DEFAULT_SPEED_MPS;
+        }
+
+        const duration = segmentSpeed > 0 ? segmentDistance / segmentSpeed : segmentDistance / DEFAULT_SPEED_MPS;
+        segments.push({
+            startDistance,
+            endDistance,
+            duration,
+            speed: segmentSpeed
+        });
+    }
+
+    return segments;
+}
+
+function convertSpeedLimitToMps(value?: number, units?: string): number | null {
+    if (!Number.isFinite(value) || !value || value <= 0) {
+        return null;
+    }
+
+    if (units === 'MPH') {
+        return value * MPS_PER_MPH;
+    }
+
+    return value * MPS_PER_KPH;
 }

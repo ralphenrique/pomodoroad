@@ -15,6 +15,7 @@ import type { Location, RouteData } from './types';
 import Button from './components/atoms/Button';
 import { Navigation, NavigationOff } from 'lucide-react';
 import CompletionDialog from './components/molecules/CompletionDialog';
+import { calculateHelperCirclePositions } from './utils/pomodoroHelper';
 
 interface FocusRouteAppProps {
   apiKey: string;
@@ -22,6 +23,7 @@ interface FocusRouteAppProps {
 
 function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
   const status = useApiLoadingStatus();
+  const mapId = import.meta.env.VITE_PUBLIC_GOOGLE_MAP_ID;
   const [origin, setOrigin] = useState<Location | null>(null);
   const [destination, setDestination] = useState<Location | null>(null);
   const [stopovers, setStopovers] = useState<Location[]>([]);
@@ -38,10 +40,18 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
   const [showPlanner, setShowPlanner] = useState(false);
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [showHelperCircles, setShowHelperCircles] = useState(false);
+  const [helperCirclePositions, setHelperCirclePositions] = useState<google.maps.LatLng[]>([]);
 
   const handleRouteCalculated = useCallback((data: RouteData) => {
     setRouteData(data);
-  }, []);
+    
+    // Calculate helper circle positions when route is calculated
+    if (data.polyline && data.duration && origin && destination) {
+      const positions = calculateHelperCirclePositions(origin, destination, data.polyline, data.duration);
+      setHelperCirclePositions(positions);
+    }
+  }, [origin, destination]);
 
   const handleStartJourney = () => {
     if (routeData) {
@@ -73,6 +83,8 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
     setAutoCenterOnMarker(false);
     setIsResting(false);
     setRestTimeRemaining(0);
+    setShowHelperCircles(false);
+    setHelperCirclePositions([]);
     setResetKey(prev => prev + 1);
   };
 
@@ -142,6 +154,9 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
           stopovers={stopovers}
           onStopoverPositionsCalculated={setStopoverPositions}
           onMapInteraction={handleMapInteraction}
+          showHelperCircles={showHelperCircles}
+          helperCirclePositions={helperCirclePositions}
+          mapId={mapId}
         />
       </div>
 
@@ -158,7 +173,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
           </div>
         </header> */}
 
-        <main className="px-4 py-8 h-screen">
+        <main className="px-4  h-screen">
           <div className="max-w-md pointer-events-auto">
             {/* Get Started Button - Only show when planner is closed */}
             <AnimatePresence>
@@ -181,43 +196,51 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
             </AnimatePresence>
 
             {/* Journey Planner - Only show if not started and no progress */}
-            <AnimatePresence>
-              {showPlanner && !isJourneyStarted && progress === 0 && (
-                <motion.div
-                  className="bg-gray-900/70 backdrop-blur-md rounded-4xl p-6 shadow-2xl border border-gray-700/50"
-                  initial={{
-                    opacity: 0,
-                    filter: 'blur(4px)',
-                    transform: 'perspective(500px) rotateX(-20deg) scale(0.8)',
-                  }}
-                  animate={{
-                    opacity: 1,
-                    filter: 'blur(0px)',
-                    transform: 'perspective(500px) rotateX(0deg) scale(1)',
-                  }}
-                  exit={{
-                    opacity: 0,
-                    filter: 'blur(4px)',
-                    transform: 'perspective(500px) rotateX(-20deg) scale(0.8)',
-                  }}
-                  transition={{ type: 'spring', stiffness: 150, damping: 25 }}
-                >
-                  <JourneyPlanner
-                    resetKey={resetKey}
-                    isJourneyStarted={isJourneyStarted}
-                    canStartJourney={!!canStartJourney}
-                    onOriginSelect={setOrigin}
-                    onDestinationSelect={setDestination}
-                    stopovers={stopovers}
-                    onStopoversChange={setStopovers}
-                    stopoverDurations={stopoverDurations}
-                    onStopoverDurationsChange={setStopoverDurations}
-                    onStartJourney={handleStartJourney}
-                    onResetJourney={handleResetJourney}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="h-screen overflow-y-scroll py-8 scrollbar-hide">
+              <AnimatePresence>
+                {showPlanner && !isJourneyStarted && progress === 0 && (
+                  <motion.div
+                    className="bg-gray-900/70 backdrop-blur-md rounded-4xl p-6 border border-gray-700/50"
+                    initial={{
+                      opacity: 0,
+                      filter: 'blur(4px)',
+                      transform: 'perspective(500px) rotateX(-20deg) scale(0.8)',
+                    }}
+                    animate={{
+                      opacity: 1,
+                      filter: 'blur(0px)',
+                      transform: 'perspective(500px) rotateX(0deg) scale(1)',
+                    }}
+                    exit={{
+                      opacity: 0,
+                      filter: 'blur(4px)',
+                      transform: 'perspective(500px) rotateX(-20deg) scale(0.8)',
+                    }}
+                    transition={{ type: 'spring', stiffness: 150, damping: 25 }}
+                  >
+                    <JourneyPlanner
+                      resetKey={resetKey}
+                      isJourneyStarted={isJourneyStarted}
+                      canStartJourney={!!canStartJourney}
+                      onOriginSelect={setOrigin}
+                      onDestinationSelect={setDestination}
+                      stopovers={stopovers}
+                      onStopoversChange={setStopovers}
+                      stopoverDurations={stopoverDurations}
+                      onStopoverDurationsChange={setStopoverDurations}
+                      onStartJourney={handleStartJourney}
+                      onResetJourney={handleResetJourney}
+                      routeData={routeData}
+                      origin={origin}
+                      destination={destination}
+                      apiKey={apiKey}
+                      onShowHelperCircles={setShowHelperCircles}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
 
 
             {/* Route Info */}
@@ -318,7 +341,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.3 }}
                   >
-                    <h3 className="text-lg font-semibold mb-4">Focus Timer</h3>
+                    {/* <h3 className="text-lg font-semibold mb-4">Focus Timer</h3> */}
                     <FocusTimer
                       totalTime={routeData.duration}
                       elapsedTime={elapsedTime}
