@@ -27,9 +27,9 @@ interface FocusTimerProps {
   onRestTick?: (remaining: number) => void;
 }
 
-export default function FocusTimer({ 
-  totalTime, 
-  isRunning, 
+export default function FocusTimer({
+  totalTime,
+  isRunning,
   onTimeUpdate,
   onComplete,
   elapsedTime: externalElapsedTime = 0,
@@ -61,16 +61,16 @@ export default function FocusTimer({
     if (!isRunning || stopovers.length === 0 || stopoverPositions.length === 0 || !onRestStart) return;
 
     const progress = elapsedTime / totalTime;
-    
+
     stopovers.forEach((_, index) => {
       const stopoverPercentage = stopoverPositions[index];
-      
+
       if (!stopoverPercentage) return;
-      
+
       // Check if we've just reached this stopover (within 0.5% tolerance)
-      if (!completedStopovers.includes(index) && 
-          progress >= stopoverPercentage && 
-          progress < stopoverPercentage + 0.005) {
+      if (!completedStopovers.includes(index) &&
+        progress >= stopoverPercentage &&
+        progress < stopoverPercentage + 0.005) {
         const duration = stopoverDurations[index] || 5;
         setCompletedStopovers(prev => [...prev, index]);
         onRestStart(index, duration);
@@ -86,7 +86,7 @@ export default function FocusTimer({
       if (onRestTick) {
         const newRemaining = restTimeRemaining - 1;
         onRestTick(newRemaining);
-        
+
         if (newRemaining <= 0) {
           setShowRestCompleteDialog(true);
         }
@@ -102,7 +102,7 @@ export default function FocusTimer({
     const interval = setInterval(() => {
       setElapsedTime(prev => {
         const newTime = prev + 1;
-        
+
         if (newTime >= totalTime) {
           clearInterval(interval);
           onComplete();
@@ -125,30 +125,30 @@ export default function FocusTimer({
 
 
   const progress = totalTime > 0 ? (elapsedTime / totalTime) * 100 : 0;
-  
+
   // Calculate time to next stopover
   const getNextStopoverTime = (): number | null => {
     if (stopovers.length === 0 || stopoverPositions.length === 0) return null;
-    
+
     const currentProgress = elapsedTime / totalTime;
-    
+
     for (let i = 0; i < stopovers.length; i++) {
       if (completedStopovers.includes(i)) continue;
-      
+
       const stopoverPercentage = stopoverPositions[i];
       if (!stopoverPercentage) continue;
-      
+
       if (stopoverPercentage > currentProgress) {
         const timeToStopover = (stopoverPercentage - currentProgress) * totalTime;
         return Math.max(0, timeToStopover);
       }
     }
-    
+
     return null;
   };
-  
+
   const nextStopoverTime = getNextStopoverTime();
-  
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -165,16 +165,21 @@ export default function FocusTimer({
   return (
     <>
       <div className="w-full space-y-4">
-        {/* Time to Next Stopover */}
-        {nextStopoverTime !== null && !isResting && (
-          <div className="flex items-center gap-2 justify-center text-sm">
-            <span className="text-gray-400">Next rest stop in:</span>
-            <span className="text-yellow-400 font-semibold">{formatTime(nextStopoverTime)}</span>
-          </div>
-        )}
-        
+        <div className='flex justify-between items-center'>
+          <h3 className="text-lg font-semibold">Progress</h3>
+
+          {/* Time to Next Stopover */}
+          {nextStopoverTime !== null && !isResting && (
+            <div className="flex items-center gap-2 justify-center text-sm">
+              <span className="text-gray-400">Next rest stop in:</span>
+              <span className="text-yellow-400 font-semibold">{formatTime(nextStopoverTime)}</span>
+            </div>
+          )}
+        </div>
+
+
         {/* Rest Timer */}
-        {isResting && restTimeRemaining > 0 && (
+        {isResting && restTimeRemaining == 0 && (
           <div className="flex items-center justify-center gap-3 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-2xl">
             <Coffee className="h-5 w-5 text-yellow-400" />
             <div className="text-center">
@@ -183,48 +188,48 @@ export default function FocusTimer({
             </div>
           </div>
         )}
-        
+
         {/* Progress Bar with Labels */}
         <div className="relative">
-        <div className="flex items-center gap-2">
-          {/* Start Label */}
-          <div className="flex-shrink-0 w-6 h-6 bg-green-400 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white">
-            A
-          </div>
-          
-          {/* Progress Bar */}
-          <div className="flex-1 relative bg-gray-800 rounded-full h-3 overflow-visible">
-            <div 
-              className="bg-white h-full transition-all duration-1000 ease-linear rounded-full"
-              style={{ width: `${progress}%` }}
-            />
-            
-            {/* Stopover Markers */}
-            {stopovers.map((_, index) => {
-              const stopoverPercentage = stopoverPositions[index];
-              if (!stopoverPercentage) return null;
-              
-              return (
-                <div
-                  key={`stopover-marker-${index}`}
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-                  style={{ left: `${stopoverPercentage * 100}%` }}
-                >
-                  <div className="w-4 h-4 bg-yellow-400 rounded-full border-2 border-white shadow-lg" />
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* End Label */}
-          <div className="flex-shrink-0 w-6 h-6 bg-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white">
-            B
+          <div className="flex items-center gap-2">
+            {/* Start Label */}
+            <div className="flex-shrink-0 w-6 h-6 bg-green-400 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white">
+              A
+            </div>
+
+            {/* Progress Bar */}
+            <div className="flex-1 relative bg-gray-800 rounded-full h-3 overflow-visible">
+              <div
+                className="bg-white h-full transition-all duration-1000 ease-linear rounded-full"
+                style={{ width: `${progress}%` }}
+              />
+
+              {/* Stopover Markers */}
+              {stopovers.map((_, index) => {
+                const stopoverPercentage = stopoverPositions[index];
+                if (!stopoverPercentage) return null;
+
+                return (
+                  <div
+                    key={`stopover-marker-${index}`}
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                    style={{ left: `${stopoverPercentage * 100}%` }}
+                  >
+                    <div className="w-4 h-4 bg-yellow-400 rounded-full border-2 border-white shadow-lg" />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* End Label */}
+            <div className="flex-shrink-0 w-6 h-6 bg-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white">
+              B
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Time Display */}
-      {/* <div className="text-center space-y-2">
+        {/* Time Display */}
+        {/* <div className="text-center space-y-2">
         <div className="text-5xl font-bold text-white font-mono">
           {formatTime(elapsedTime)}
         </div>

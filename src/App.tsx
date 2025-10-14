@@ -13,7 +13,7 @@ import { Info } from 'lucide-react';
 import JourneyPlanner from './components/organisms/JourneyPlanner';
 import type { Location, RouteData } from './types';
 import Button from './components/atoms/Button';
-import { Navigation, NavigationOff } from 'lucide-react';
+import { Navigation, NavigationOff, ArrowLeft } from 'lucide-react';
 import CompletionDialog from './components/molecules/CompletionDialog';
 import { calculateHelperCirclePositions } from './utils/pomodoroHelper';
 
@@ -162,19 +162,8 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
 
       {/* Overlay Content */}
       <div className="relative z-10 pointer-events-none">
-        {/* <header className="bg-gray-900/80 backdrop-blur-md border-b border-gray-700/50 pointer-events-auto">
-          <div className="container mx-auto px-4 py-6">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-              🚗 FocusRoute
-            </h1>
-            <p className="text-gray-200 text-sm mt-1">
-              Turn your focus time into a virtual road trip
-            </p>
-          </div>
-        </header> */}
-
         <main className="px-4  h-screen">
-          <div className="max-w-md pointer-events-auto">
+          <div className="max-w-md pointer-events-none">
             {/* Get Started Button - Only show when planner is closed */}
             <AnimatePresence>
               {!showPlanner && !isJourneyStarted && progress === 0 && (
@@ -183,11 +172,11 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ duration: 0.3 }}
-                  className='absolute bottom-8 z-20'
+                  className='absolute bottom-15 left-4 right-4 sm:left-auto sm:right-auto z-20 pointer-events-auto'
                 >
                   <Button
                     onClick={() => setShowPlanner(true)}
-                    className=" bg-gray-900/60 backdrop-blur-md rounded-full p-4 px-12 border border-gray-600/50 "
+                    className=" bg-gray-900/60 backdrop-blur-md w-full rounded-full p-4 px-12 border border-gray-600/50 "
                   >
                     <h1 className='text-center text-2xl font-bold'>Get Started</h1>
                   </Button>
@@ -196,11 +185,11 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
             </AnimatePresence>
 
             {/* Journey Planner - Only show if not started and no progress */}
-            <div className="h-screen overflow-y-scroll py-8 scrollbar-hide">
+            <div className="h-screen overflow-y-scroll py-8 scrollbar-hide pointer-events-none ">
               <AnimatePresence>
                 {showPlanner && !isJourneyStarted && progress === 0 && (
                   <motion.div
-                    className="bg-gray-900/70 backdrop-blur-md rounded-4xl p-6 border border-gray-700/50"
+                    className="bg-gray-900/70 backdrop-blur-md rounded-4xl p-6 border border-gray-700/50 mt-20 md:mt-0 pointer-events-auto relative z-20"
                     initial={{
                       opacity: 0,
                       filter: 'blur(4px)',
@@ -218,6 +207,14 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                     }}
                     transition={{ type: 'spring', stiffness: 150, damping: 25 }}
                   >
+                    {/* Back Button */}
+                    <button
+                      onClick={() => setShowPlanner(false)}
+                      className="absolute top-6 right-6 p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/50 transition-colors duration-200"
+                      aria-label="Close planner"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
                     <JourneyPlanner
                       resetKey={resetKey}
                       isJourneyStarted={isJourneyStarted}
@@ -274,7 +271,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
 
             {/* Info Toggle - Always visible */}
             <motion.div
-              className="absolute top-8 right-6 z-20"
+              className="absolute top-8 right-6 z-10"
               style={{ pointerEvents: 'auto' }}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -312,36 +309,46 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                 </motion.div>
               )}
             </AnimatePresence>
-
+{/* routeData && (isJourneyStarted || progress > 0) */}
             {/* Bottom Components Container */}
             <AnimatePresence>
-              {routeData && (isJourneyStarted || progress > 0) && (
+              { routeData && (isJourneyStarted || progress > 0) &&(
                 <motion.div
-                  className="absolute bottom-8 left-6 right-6 z-20 flex gap-4 items-end"
+                  className="absolute bottom-8 left-6 right-6 z-20 flex flex-col md:flex-row gap-4 md:items-end"
                   style={{ pointerEvents: 'auto' }}
                   initial={{ opacity: 0, y: 40 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 40 }}
                   transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
                 >
-                  {/* Time Left */}
-                  <motion.div
-                    className="flex-shrink-0"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, delay: 0.2 }}
-                  >
-                    <TimeLeft timeLeft={routeData.duration - elapsedTime} />
-                  </motion.div>
+                  {/* Time Left & Distance Left - Top row on mobile, side items on desktop */}
+                  <div className="flex justify-between gap-4 order-1 md:order-none">
+                    <motion.div
+                      className="flex-initial md:flex-shrink-0"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3, delay: 0.2 }}
+                    >
+                      <TimeLeft timeLeft={routeData.duration - elapsedTime} />
+                    </motion.div>
 
-                  {/* Timer - Fills remaining space */}
+                    <motion.div
+                      className="flex-initial md:flex-shrink-0 md:hidden"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3, delay: 0.4 }}
+                    >
+                      <DistanceLeft distanceLeft={routeData.distance * (1 - progress)} />
+                    </motion.div>
+                  </div>
+
+                  {/* Timer - Bottom on mobile, center on desktop */}
                   <motion.div
-                    className="flex-1 bg-gray-900/60 backdrop-blur-md rounded-4xl  p-6 border border-gray-700/50"
+                    className="order-2 md:order-none md:flex-1 bg-gray-900/60 backdrop-blur-md rounded-xl lg:rounded-4xl p-3 lg:p-6 border border-gray-700/50"
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.3 }}
                   >
-                    {/* <h3 className="text-lg font-semibold mb-4">Focus Timer</h3> */}
                     <FocusTimer
                       totalTime={routeData.duration}
                       elapsedTime={elapsedTime}
@@ -367,9 +374,9 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                     />
                   </motion.div>
 
-                  {/* Distance Left */}
+                  {/* Distance Left - Desktop only, on the right */}
                   <motion.div
-                    className="flex-shrink-0"
+                    className="hidden md:block md:flex-shrink-0"
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.4 }}
@@ -394,7 +401,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
 }
 
 function App() {
-  const apiKey = import.meta.env.VITE_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const apiKey = import.meta.env.VITE_PUBLIC_GOOGLE_API_KEY;
 
   if (!apiKey) {
     return (
@@ -402,7 +409,7 @@ function App() {
         <div className="text-center max-w-md">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold mb-2">API Key Missing</h2>
-          <p className="text-gray-400 mb-4">Please set VITE_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.</p>
+          <p className="text-gray-400 mb-4">Please set VITE_PUBLIC_GOOGLE_API_KEY in your .env file.</p>
         </div>
       </div>
     );

@@ -25,11 +25,18 @@ Make sure these are enabled in your Google Cloud project:
 1. **Routes API** (primary)
 2. **Maps JavaScript API** (for map rendering)
 3. **Places API** (for location autocomplete)
+4. **Roads API** (for speed limit data via the proxy endpoint)
 
 ### Environment Variables
 ```env
-VITE_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+VITE_PUBLIC_GOOGLE_API_KEY=your_browser_safe_key
+GOOGLE_ROADS_API_KEY=your_server_only_key
 ```
+
+- `VITE_PUBLIC_GOOGLE_API_KEY` stays readable in the browser and powers the Maps JS, Places, and Routes calls.
+- `GOOGLE_ROADS_API_KEY` must remain server-side. Configure it in Vercel → Project Settings → Environment Variables (and keep it out of `VITE_`-prefixed variables).
+
+For local development run `vercel dev --listen 3000` alongside `bun run dev --host`. The Vite dev server proxies requests to `/api/*` over to the local Vercel function, matching production behaviour.
 
 ## Implementation Details
 

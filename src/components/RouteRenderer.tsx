@@ -17,6 +17,7 @@ interface RouteRendererProps {
 }
 
 const DEFAULT_SPEED_MPS = 13.4;
+const SPEED_LIMITS_ENABLED = false;
 const MAX_SPEED_LIMIT_POINTS_PER_REQUEST = 90;
 const MPS_PER_KPH = 1000 / 3600;
 const MPS_PER_MPH = 1609.34 / 3600;
@@ -487,7 +488,7 @@ export default function RouteRenderer({
                     let speedLimitSamples: number[] = [];
                     if (simplePath.length > 1) {
                         try {
-                            speedLimitSamples = await fetchSpeedLimitsForRoute(simplePath, apiKey);
+                            speedLimitSamples = await fetchSpeedLimitsForRoute(simplePath);
                         } catch (speedLimitError) {
                             console.error('Error fetching speed limits:', speedLimitError);
                         }
@@ -764,7 +765,11 @@ export default function RouteRenderer({
     return null;
 }
 
-async function fetchSpeedLimitsForRoute(points: SimpleLatLng[], apiKey: string): Promise<number[]> {
+async function fetchSpeedLimitsForRoute(points: SimpleLatLng[]): Promise<number[]> {
+    if (!SPEED_LIMITS_ENABLED) {
+        return [];
+    }
+
     if (points.length === 0) {
         return [];
     }
@@ -781,14 +786,14 @@ async function fetchSpeedLimitsForRoute(points: SimpleLatLng[], apiKey: string):
 
         const params = new URLSearchParams();
         params.set('units', 'KPH');
-        params.set('key', apiKey);
         const pathValue = chunk.map(point => `${point.lat},${point.lng}`).join('|');
         params.set('path', pathValue);
 
         try {
-            const response = await fetch(`https://roads.googleapis.com/v1/speedLimits?${params.toString()}`);
+            const response = await fetch(`/api/roads-speed-limits?${params.toString()}`);
             if (!response.ok) {
-                console.error('Speed limits request failed:', response.statusText);
+                const errorText = await response.text();
+                console.error('Speed limits request failed:', response.status, errorText);
                 continue;
             }
 

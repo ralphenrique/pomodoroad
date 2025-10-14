@@ -4,8 +4,8 @@ goal mvp (focus here)
 
 
 succeeding features (to be done later)
-1. can add custom stops
-2. can travel on boat
+1. can add custom stops - done
+2. can travel on boat - done
 3. add music spotify/apple music
 4. ui improvements and stuff
 5. ...and more
