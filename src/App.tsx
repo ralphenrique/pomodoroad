@@ -16,6 +16,8 @@ import Button from './components/atoms/Button';
 import { Navigation, NavigationOff, ArrowLeft } from 'lucide-react';
 import CompletionDialog from './components/molecules/CompletionDialog';
 import { calculateHelperCirclePositions } from './utils/pomodoroHelper';
+import Lottie from 'lottie-react';
+import paperplaneAnimation from './assets/Loading.json';
 
 interface FocusRouteAppProps {
   apiKey: string;
@@ -45,7 +47,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
 
   const handleRouteCalculated = useCallback((data: RouteData) => {
     setRouteData(data);
-    
+
     // Calculate helper circle positions when route is calculated
     if (data.polyline && data.duration && origin && destination) {
       const positions = calculateHelperCirclePositions(origin, destination, data.polyline, data.duration);
@@ -118,8 +120,11 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading Google Maps...</p>
+          <Lottie
+            animationData={paperplaneAnimation}
+            loop={true}
+            style={{ width: 500, height: 500 }}
+          />
         </div>
       </div>
     );
@@ -165,8 +170,9 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
         <main className="px-4  h-screen">
           <div className="max-w-md pointer-events-none">
             {/* Get Started Button - Only show when planner is closed */}
+            
             <AnimatePresence>
-              {!showPlanner && !isJourneyStarted && progress === 0 && (
+              {!showPlanner && !isJourneyStarted && progress === 0 && APILoadingStatus.LOADING && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -309,10 +315,10 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
                 </motion.div>
               )}
             </AnimatePresence>
-{/* routeData && (isJourneyStarted || progress > 0) */}
+            {/* routeData && (isJourneyStarted || progress > 0) */}
             {/* Bottom Components Container */}
             <AnimatePresence>
-              { routeData && (isJourneyStarted || progress > 0) &&(
+              {routeData && (isJourneyStarted || progress > 0) && (
                 <motion.div
                   className="absolute bottom-8 left-6 right-6 z-20 flex flex-col md:flex-row gap-4 md:items-end"
                   style={{ pointerEvents: 'auto' }}
@@ -389,7 +395,7 @@ function FocusRouteApp({ apiKey }: FocusRouteAppProps) {
           </div>
         </main>
       </div>
-{/* completionDialogOpen */}
+      {/* completionDialogOpen */}
       {/* Completion Dialog */}
       <CompletionDialog
         open={completionDialogOpen}

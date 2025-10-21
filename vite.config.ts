@@ -22,9 +22,9 @@ export default defineConfig({
         short_name: 'PomodoRoad',
         description: 'Transform your focus sessions into virtual road trips!',
         start_url: '/',
-        display: 'standalone',
-        background_color: '#ffffff',
-        theme_color: '#000000',
+        display: 'fullscreen',
+        background_color: '#111827',
+        theme_color: '#111827',
         icons: [
           {
             src: '/icons/icon-48x48.png',
@@ -94,6 +94,22 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src')
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separate vendor chunks
+          'react-vendor': ['react', 'react-dom'],
+          'google-maps': ['@vis.gl/react-google-maps'],
+          'animation': ['motion'],
+          'ui-components': ['lucide-react', 'radix-ui'],
+          'markdown': ['react-markdown'],
+        }
+      }
+    },
+    // Increase chunk size warning limit to 1000 KB (only for chunks that can't be split further)
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     proxy: {

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Map } from '@vis.gl/react-google-maps';
+import Lottie from 'lottie-react';
 import type { Location, RouteData } from '../types';
 import RouteRenderer from './RouteRenderer';
+import paperplaneAnimation from '../assets/Loading.json';
 
 interface RouteMapProps {
     apiKey: string;
@@ -62,7 +64,11 @@ export default function RouteMap({
     if (!initialCenter) {
         return (
             <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                <div className="text-gray-400">Loading map...</div>
+                <Lottie 
+                    animationData={paperplaneAnimation} 
+                    loop={true}
+                    style={{ width: 500, height: 500 }}
+                />
             </div>
         );
     }
